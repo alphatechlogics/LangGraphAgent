@@ -168,4 +168,4 @@ with gr.Blocks(title="Customer Support Agent with Browser Use") as demo:
     submit_btn.click(fn=run_customer_support, inputs=[query_input, api_key_input], outputs=output_box)
 
 # Launch the Gradio interface.
-demo.launch()
+demo.launch(share=True)
