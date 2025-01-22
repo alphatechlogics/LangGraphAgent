@@ -69,19 +69,30 @@ async def run_browser_agent(task: str) -> str:
 def handle_general(state: State) -> State:
     """
     For general queries, we use the browser agent to consult online resources.
-    We call the async function with asyncio.run.
+    We call the async function with asyncio.run and then extract only the final answer.
     """
     task = (
         "You are a customer support agent that consults online sources. "
         f"Provide a detailed, informed response to this customer query: {state['query']}"
     )
     result = asyncio.run(run_browser_agent(task))
-    # If result is not a string, convert it
+    final_text = ""
+    
     if isinstance(result, str):
-        text = result.strip()
+        final_text = result.strip()
+    elif hasattr(result, "all_results"):
+        # Iterate over the list of ActionResults to extract the final done answer
+        for action in result.all_results:
+            # Check if the action is marked as done and has extracted content
+            if action.get("is_done") and action.get("extracted_content"):
+                final_text = action.get("extracted_content").strip()
+        # Fallback in case no done action is found
+        if not final_text:
+            final_text = str(result).strip()
     else:
-        text = str(result).strip()
-    return {"response": text}
+        final_text = str(result).strip()
+    
+    return {"response": final_text}
 
 def escalate(state: State) -> State:
     return {"response": "This query has been escalated to a human agent due to negative sentiment."}
