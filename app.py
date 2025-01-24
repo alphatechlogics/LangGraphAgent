@@ -25,6 +25,10 @@ except Exception as e:
 # ─────────────────────────────────────────────────────────────────────
 load_dotenv()
 
+
+os.environ["BROWSER_USE_HEADLESS"] = "true"
+os.environ["BROWSER_USE_NO_SANDBOX"] = "true"
+
 # If you've installed Chrome in packages.txt, set up environment for headless mode:
 os.environ["BROWSER_USE_HEADLESS"] = "true"
 os.environ["BROWSER_USE_NO_SANDBOX"] = "true"
