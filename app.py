@@ -29,7 +29,7 @@ from browser_use import BrowserConfig
 
 # Basic configuration
 config = BrowserConfig(
-    headless=True,
+    headless=False,
     disable_security=True
 )
 
