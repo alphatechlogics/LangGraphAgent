@@ -25,13 +25,13 @@ except Exception as e:
 # ─────────────────────────────────────────────────────────────────────
 #load_dotenv()
 
-from browser_use import config
+from browser_use import BrowserConfig
 
-# Force these booleans in code
-config.Config.HEADLESS = True
-config.Config.NO_SANDBOX = True
-# If there's a CHROME option, disable it or ensure it also is forced headless
-config.Config.USE_CHROME = False  # or True if it honors HEADLESS
+# Basic configuration
+config = BrowserConfig(
+    headless=True,
+    disable_security=True
+)
 
 # ─────────────────────────────────────────────────────────────────────
 # 2) ChatOpenAI initialization
