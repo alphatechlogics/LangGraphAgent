@@ -23,11 +23,15 @@ except Exception as e:
 # ─────────────────────────────────────────────────────────────────────
 # 1) Load environment (.env)
 # ─────────────────────────────────────────────────────────────────────
-load_dotenv()
+#load_dotenv()
 
+from browser_use import config
 
-os.environ["BROWSER_USE_HEADLESS"] = "true"
-os.environ["BROWSER_USE_NO_SANDBOX"] = "true"
+# Force these booleans in code
+config.Config.HEADLESS = True
+config.Config.NO_SANDBOX = True
+# If there's a CHROME option, disable it or ensure it also is forced headless
+config.Config.USE_CHROME = False  # or True if it honors HEADLESS
 
 # ─────────────────────────────────────────────────────────────────────
 # 2) ChatOpenAI initialization
