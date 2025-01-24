@@ -10,6 +10,16 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from browser_use import Agent, AgentHistoryList, ActionResult
 
+import subprocess
+
+# Attempt to install the chromium browser for Playwright if not already installed
+try:
+    subprocess.run(["playwright", "install", "chromium"], check=True)
+except Exception as e:
+    print(f"Warning: Could not install chromium via Playwright: {e}")
+
+
+
 # ─────────────────────────────────────────────────────────────────────
 # 1) Load environment (.env)
 # ─────────────────────────────────────────────────────────────────────
