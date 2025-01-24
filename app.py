@@ -8,7 +8,7 @@ import streamlit as st
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from browser_use import Agent, AgentHistoryList, ActionResult
+from browser_use import Agent, AgentHistoryList, ActionResult, BrowserConfig  # Import BrowserConfig
 
 import subprocess
 
@@ -18,18 +18,19 @@ try:
 except Exception as e:
     print(f"Warning: Could not install chromium via Playwright: {e}")
 
-
-
 # ─────────────────────────────────────────────────────────────────────
 # 1) Load environment (.env)
 # ─────────────────────────────────────────────────────────────────────
-#load_dotenv()
+load_dotenv()
 
-from browser_use import BrowserConfig
+# Remove or comment out environment variable settings related to browser_use
+# os.environ["BROWSER_USE_HEADLESS"] = "true"
+# os.environ["BROWSER_USE_NO_SANDBOX"] = "true"
+# os.environ["BROWSER_USE_CHROME"] = "true"
 
-# Basic configuration
-config = BrowserConfig(
-    headless=False,
+# Define BrowserConfig
+browser_config = BrowserConfig(
+    headless=True,
     disable_security=True
 )
 
@@ -44,7 +45,7 @@ def get_llm():
     )
 
 def get_llm_browser():
-    """Returns a ChatOpenAI instance for the browser agent (e.g. GPT-4)."""
+    """Returns a ChatOpenAI instance for the browser agent (e.g., GPT-4)."""
     return ChatOpenAI(
         model="gpt-4o",  # Adjust if needed
         temperature=0,
@@ -59,7 +60,7 @@ class State(TypedDict, total=False):
     category: str
     sentiment: str
     response: str
-    agent_history: AgentHistoryList  # we store the full agent history here
+    agent_history: AgentHistoryList  # Store the full agent history here
 
 # ─────────────────────────────────────────────────────────────────────
 # 4) Node-like functions
@@ -103,40 +104,35 @@ def handle_billing(state: State) -> State:
     state["response"] = response
     return state
 
-async def run_browser_agent(task: str) -> AgentHistoryList:
+async def run_browser_agent(task: str, browser_config: BrowserConfig) -> AgentHistoryList:
     """
     Run the browser-use Agent asynchronously and return its entire AgentHistoryList.
     """
-    agent = Agent(task=task, llm=get_llm_browser())
+    agent = Agent(task=task, llm=get_llm_browser(), config=browser_config)
     history = await agent.run()
     return history
 
 async def handle_general(state: State) -> State:
     """
-    For general queries, we do a browser-based approach.
-    We'll store the entire agent history in state["agent_history"].
-    We'll parse the final "done" text or the final is_done result as the 'response'.
+    For general queries, use a browser-based approach.
     """
     task = (
         "You are a customer support agent that consults online sources. "
         f"Provide a detailed, informed response to this customer query: {state['query']}"
     )
-    history = await run_browser_agent(task)
+    history = await run_browser_agent(task, browser_config)
     state["agent_history"] = history
 
     final_text = ""
 
-    # Approach: parse the final text from either "done":{"text":"..."} or an is_done action's "extracted_content"
+    # Parse the final text from the agent history
     if hasattr(history, "all_results"):
-        # We'll iterate in reverse, looking for the final step first
         for action in reversed(history.all_results):
-            # If there's a 'done':{'text': ...} block
             if "done" in action and isinstance(action["done"], dict):
                 text_val = action["done"].get("text", "").strip()
                 if text_val:
                     final_text = text_val
                     break
-            # Alternatively, if is_done is True, check extracted_content
             if action.get("is_done") and "extracted_content" in action:
                 text_val = action["extracted_content"].strip()
                 if text_val:
@@ -199,7 +195,6 @@ async def process_query(query: str, api_key: str):
     """
     Returns (final_text, full_agent_history).
     """
-    # Possibly override environment key
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
     elif not os.getenv("OPENAI_API_KEY"):
