@@ -80,7 +80,7 @@ Install the necessary packages. We use uv pip to ensure packages are installed w
 
 ```bash
 uv pip install langgraph langchain_openai gradio
-uv pip install --pre browser-use
+uv pip install browser-use
 playwright install
 ```
 
