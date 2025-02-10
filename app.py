@@ -11,6 +11,8 @@ from langchain_openai import ChatOpenAI
 from browser_use import Agent, AgentHistoryList, ActionResult  # Import global config
 
 import subprocess
+from browser_use import Agent, BrowserConfig
+
 
 # Attempt to install the chromium browser for Playwright if not already installed
 try:
@@ -26,6 +28,12 @@ load_dotenv()
 
 # Unset DISPLAY to help ensure headless behavior.
 os.environ.pop("DISPLAY", None)
+# Create a BrowserConfig that forces headless mode.
+browser_config = BrowserConfig(
+    headless=True,               # Run browser without a visible UI
+    disable_security=True,       # Disable security features (if needed)
+    extra_chromium_args=["--no-sandbox"]  # Additional Chromium arguments
+)
 
 # ─────────────────────────────────────────────────────────────────────
 # 2) ChatOpenAI initialization
@@ -109,10 +117,9 @@ def handle_billing(state: State) -> State:
 
 
 async def run_browser_agent(task: str) -> AgentHistoryList:
-    """
-    Run the browser-use Agent asynchronously and return its entire AgentHistoryList.
-    """
-    agent = Agent(task=task, llm=get_llm_browser())  # No config passed
+    # Pass the configuration to the Agent
+    agent = Agent(task=task, llm=get_llm_browser(),
+                  browser_config=browser_config)
     history = await agent.run()
     return history
 
