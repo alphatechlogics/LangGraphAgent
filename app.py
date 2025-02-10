@@ -24,9 +24,14 @@ except Exception as e:
 load_dotenv()
 
 
+# Unset DISPLAY to help ensure headless behavior.
+os.environ.pop("DISPLAY", None)
+
 # ─────────────────────────────────────────────────────────────────────
 # 2) ChatOpenAI initialization
 # ─────────────────────────────────────────────────────────────────────
+
+
 def get_llm():
     """Returns a ChatOpenAI instance using OPENAI_API_KEY from environment."""
     return ChatOpenAI(
