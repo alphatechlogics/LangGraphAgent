@@ -8,7 +8,7 @@ import streamlit as st
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from browser_use import Agent, AgentHistoryList, ActionResult, BrowserConfig  # Import BrowserConfig
+from browser_use import Agent, AgentHistoryList, ActionResult  # Import global config
 
 import subprocess
 
@@ -23,16 +23,6 @@ except Exception as e:
 # ─────────────────────────────────────────────────────────────────────
 load_dotenv()
 
-# Remove or comment out environment variable settings related to browser_use
-# os.environ["BROWSER_USE_HEADLESS"] = "true"
-# os.environ["BROWSER_USE_NO_SANDBOX"] = "true"
-# os.environ["BROWSER_USE_CHROME"] = "true"
-
-# Define BrowserConfig
-browser_config = BrowserConfig(
-    headless=True,
-    disable_security=True
-)
 
 # ─────────────────────────────────────────────────────────────────────
 # 2) ChatOpenAI initialization
@@ -43,6 +33,7 @@ def get_llm():
         temperature=0,
         openai_api_key=os.getenv("OPENAI_API_KEY")
     )
+
 
 def get_llm_browser():
     """Returns a ChatOpenAI instance for the browser agent (e.g., GPT-4)."""
@@ -55,6 +46,8 @@ def get_llm_browser():
 # ─────────────────────────────────────────────────────────────────────
 # 3) TypedDict for state
 # ─────────────────────────────────────────────────────────────────────
+
+
 class State(TypedDict, total=False):
     query: str
     category: str
@@ -65,6 +58,8 @@ class State(TypedDict, total=False):
 # ─────────────────────────────────────────────────────────────────────
 # 4) Node-like functions
 # ─────────────────────────────────────────────────────────────────────
+
+
 def categorize(state: State) -> State:
     prompt = ChatPromptTemplate.from_template(
         "Categorize the following customer query into one of these categories: "
@@ -74,6 +69,7 @@ def categorize(state: State) -> State:
     category = chain.invoke({"query": state["query"]}).content.strip()
     state["category"] = category
     return state
+
 
 def analyze_sentiment(state: State) -> State:
     prompt = ChatPromptTemplate.from_template(
@@ -86,6 +82,7 @@ def analyze_sentiment(state: State) -> State:
     state["sentiment"] = sentiment
     return state
 
+
 def handle_technical(state: State) -> State:
     prompt = ChatPromptTemplate.from_template(
         "Provide a technical support response to the following query: {query}"
@@ -94,6 +91,7 @@ def handle_technical(state: State) -> State:
     response = chain.invoke({"query": state["query"]}).content.strip()
     state["response"] = response
     return state
+
 
 def handle_billing(state: State) -> State:
     prompt = ChatPromptTemplate.from_template(
@@ -104,13 +102,15 @@ def handle_billing(state: State) -> State:
     state["response"] = response
     return state
 
-async def run_browser_agent(task: str, browser_config: BrowserConfig) -> AgentHistoryList:
+
+async def run_browser_agent(task: str) -> AgentHistoryList:
     """
     Run the browser-use Agent asynchronously and return its entire AgentHistoryList.
     """
-    agent = Agent(task=task, llm=get_llm_browser(), config=browser_config)
+    agent = Agent(task=task, llm=get_llm_browser())  # No config passed
     history = await agent.run()
     return history
+
 
 async def handle_general(state: State) -> State:
     """
@@ -120,24 +120,26 @@ async def handle_general(state: State) -> State:
         "You are a customer support agent that consults online sources. "
         f"Provide a detailed, informed response to this customer query: {state['query']}"
     )
-    history = await run_browser_agent(task, browser_config)
+    history = await run_browser_agent(task)
     state["agent_history"] = history
 
     final_text = ""
 
-    # Parse the final text from the agent history
+    # Parse the final text from the agent history using attribute access
     if hasattr(history, "all_results"):
         for action in reversed(history.all_results):
-            if "done" in action and isinstance(action["done"], dict):
-                text_val = action["done"].get("text", "").strip()
-                if text_val:
-                    final_text = text_val
+            # Check if the action is marked as done
+            if getattr(action, "is_done", False):
+                # Prefer the 'extracted_content' if available
+                if hasattr(action, "extracted_content") and action.extracted_content:
+                    final_text = action.extracted_content.strip()
                     break
-            if action.get("is_done") and "extracted_content" in action:
-                text_val = action["extracted_content"].strip()
-                if text_val:
-                    final_text = text_val
-                    break
+                # Alternatively, if the action has a 'done' attribute with text
+                if hasattr(action, "done") and isinstance(action.done, dict):
+                    text_val = action.done.get("text", "").strip()
+                    if text_val:
+                        final_text = text_val
+                        break
 
     if not final_text:
         final_text = "No final content found."
@@ -145,9 +147,11 @@ async def handle_general(state: State) -> State:
     state["response"] = final_text
     return state
 
+
 def escalate(state: State) -> State:
     state["response"] = "This query has been escalated to a human agent due to negative sentiment."
     return state
+
 
 def route_query(state: State) -> str:
     """
@@ -165,6 +169,8 @@ def route_query(state: State) -> str:
 # ─────────────────────────────────────────────────────────────────────
 # 5) Workflow
 # ─────────────────────────────────────────────────────────────────────
+
+
 async def run_workflow(state: State) -> State:
     """
     Steps:
@@ -191,6 +197,8 @@ async def run_workflow(state: State) -> State:
 # ─────────────────────────────────────────────────────────────────────
 # 6) Main orchestrator for user queries
 # ─────────────────────────────────────────────────────────────────────
+
+
 async def process_query(query: str, api_key: str):
     """
     Returns (final_text, full_agent_history).
@@ -217,6 +225,8 @@ async def process_query(query: str, api_key: str):
 # ─────────────────────────────────────────────────────────────────────
 # 7) Streamlit UI
 # ─────────────────────────────────────────────────────────────────────
+
+
 def main():
     st.title("Customer Support Agent with Browser Use (Streamlit)")
     st.write(
@@ -224,14 +234,16 @@ def main():
         "agent to provide informed answers when the query is general."
     )
 
-    api_key = st.text_input("OpenAI API Key", type="password", placeholder="sk-...")
+    api_key = st.text_input(
+        "OpenAI API Key", type="password", placeholder="sk-...")
     query = st.text_input("Customer Query", "Who is Elon Musk?")
 
     if st.button("Submit Query"):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            final_text, agent_history = loop.run_until_complete(process_query(query, api_key))
+            final_text, agent_history = loop.run_until_complete(
+                process_query(query, api_key))
 
             # 1) Show the final text
             st.subheader("Agent Response (Final Answer)")
@@ -250,6 +262,7 @@ def main():
 
         finally:
             loop.close()
+
 
 if __name__ == "__main__":
     main()
