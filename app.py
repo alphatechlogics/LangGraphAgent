@@ -11,9 +11,8 @@ from langchain_openai import ChatOpenAI
 from browser_use import Agent, AgentHistoryList, ActionResult  # Import global config
 
 import subprocess
-from browser_use import Agent, BrowserConfig
-
-
+from browser_use import Agent, AgentHistoryList, ActionResult  # Your other imports
+from browser_use import BrowserConfig
 # Attempt to install the chromium browser for Playwright if not already installed
 try:
     subprocess.run(["playwright", "install", "chromium"], check=True)
@@ -25,16 +24,14 @@ except Exception as e:
 # ─────────────────────────────────────────────────────────────────────
 load_dotenv()
 
-
 # Unset DISPLAY to help ensure headless behavior.
 os.environ.pop("DISPLAY", None)
-# Create a BrowserConfig that forces headless mode.
+
 browser_config = BrowserConfig(
     headless=True,               # Run browser without a visible UI
     disable_security=True,       # Disable security features (if needed)
     extra_chromium_args=["--no-sandbox"]  # Additional Chromium arguments
 )
-
 # ─────────────────────────────────────────────────────────────────────
 # 2) ChatOpenAI initialization
 # ─────────────────────────────────────────────────────────────────────
@@ -115,11 +112,20 @@ def handle_billing(state: State) -> State:
     state["response"] = response
     return state
 
+# ─────────────────────────────────────────────────────────────────────
+# 5) Browser Agent for general queries using a BrowserContext
+# ─────────────────────────────────────────────────────────────────────
+
 
 async def run_browser_agent(task: str) -> AgentHistoryList:
-    # Pass the configuration to the Agent
-    agent = Agent(task=task, llm=get_llm_browser(),
-                  browser_config=browser_config)
+    # Import Browser from browser_use.
+    from browser_use import Browser
+
+    # Create a Browser instance using our BrowserConfig.
+    browser = Browser(config=browser_config)
+
+    # Create the Agent by passing the browser instance directly.
+    agent = Agent(task=task, llm=get_llm_browser(), browser=browser)
     history = await agent.run()
     return history
 
@@ -140,13 +146,10 @@ async def handle_general(state: State) -> State:
     # Parse the final text from the agent history using attribute access
     if hasattr(history, "all_results"):
         for action in reversed(history.all_results):
-            # Check if the action is marked as done
             if getattr(action, "is_done", False):
-                # Prefer the 'extracted_content' if available
                 if hasattr(action, "extracted_content") and action.extracted_content:
                     final_text = action.extracted_content.strip()
                     break
-                # Alternatively, if the action has a 'done' attribute with text
                 if hasattr(action, "done") and isinstance(action.done, dict):
                     text_val = action.done.get("text", "").strip()
                     if text_val:
@@ -166,9 +169,6 @@ def escalate(state: State) -> State:
 
 
 def route_query(state: State) -> str:
-    """
-    Decide which function to call based on sentiment and category.
-    """
     if state["sentiment"].lower() == "negative":
         return "escalate"
     elif state["category"].lower() == "technical":
@@ -179,18 +179,11 @@ def route_query(state: State) -> str:
         return "handle_general"
 
 # ─────────────────────────────────────────────────────────────────────
-# 5) Workflow
+# 6) Workflow
 # ─────────────────────────────────────────────────────────────────────
 
 
 async def run_workflow(state: State) -> State:
-    """
-    Steps:
-      1) categorize
-      2) analyze_sentiment
-      3) route
-      4) call the correct node
-    """
     state = categorize(state)
     state = analyze_sentiment(state)
     next_step = route_query(state)
@@ -207,14 +200,11 @@ async def run_workflow(state: State) -> State:
     return state
 
 # ─────────────────────────────────────────────────────────────────────
-# 6) Main orchestrator for user queries
+# 7) Main orchestrator for user queries
 # ─────────────────────────────────────────────────────────────────────
 
 
 async def process_query(query: str, api_key: str):
-    """
-    Returns (final_text, full_agent_history).
-    """
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
     elif not os.getenv("OPENAI_API_KEY"):
@@ -235,7 +225,7 @@ async def process_query(query: str, api_key: str):
         return (f"Error: {str(e)}", None)
 
 # ─────────────────────────────────────────────────────────────────────
-# 7) Streamlit UI
+# 8) Streamlit UI
 # ─────────────────────────────────────────────────────────────────────
 
 
@@ -257,17 +247,14 @@ def main():
             final_text, agent_history = loop.run_until_complete(
                 process_query(query, api_key))
 
-            # 1) Show the final text
             st.subheader("Agent Response (Final Answer)")
             st.write(final_text)
 
-            # 2) Show GIF if present
             gif_files = glob.glob("agent_history.gif")
             if gif_files:
                 st.subheader("Browser Agent GIF")
                 st.image(gif_files[0], caption="Agent History")
 
-            # 3) Show the entire agent history
             if agent_history:
                 st.subheader("Complete Agent Response")
                 st.write(str(agent_history))
